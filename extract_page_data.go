@@ -30,11 +30,11 @@ func extractPageData(html, pageURL string) PageData {
 
 	outGoingLinks, err := getURLsFromHTML(html, baseURL)
 	if err != nil {
-		log.Fatalf("extracting URLs error: %v", err)
+		log.Printf("extracting URLs error: %v", err)
 	}
 	imageURLs, err := getImagesFromHTML(html, baseURL)
 	if err != nil {
-		log.Fatalf("extracting images error: %v", err)
+		log.Printf("extracting images error: %v", err)
 	}
 	return PageData{
 		URL:            pageURL,

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -20,10 +19,11 @@ func main() {
 	rawBaseURL := args[0]
 	fmt.Printf("starting crawl of: %s\n", rawBaseURL)
 
-	html, err := getHTML(rawBaseURL)
-	if err != nil {
-		log.Fatal(err)
-	}
+	pages := make(map[string]int)
 
-	fmt.Println(html)
+	crawlPage(rawBaseURL, rawBaseURL, pages)
+
+	for normalizedURL, count := range pages {
+		fmt.Printf("%d - %s\n", count, normalizedURL)
+	}
 }
