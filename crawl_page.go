@@ -2,50 +2,58 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 )
 
-func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
-	parsedRawBaseURL, err := url.Parse(rawBaseURL)
-	if err != nil {
-		fmt.Printf("Error - crawlPage: couldn't parse URL '%s': %v\n", rawBaseURL, err)
+func (cfg *config) crawlPage(rawCurrentURL string) {
+	cfg.concurrencyControl <- struct{}{}
+	defer func() {
+		<-cfg.concurrencyControl
+		cfg.wg.Done()
+	}()
+
+	if cfg.pagesLen() >= cfg.maxPages {
 		return
 	}
-	parsedRawCurrentURL, err := url.Parse(rawCurrentURL)
+
+	currentURL, err := url.Parse(rawCurrentURL)
 	if err != nil {
 		fmt.Printf("Error - crawlPage: couldn't parse URL '%s': %v\n", rawCurrentURL, err)
 		return
 	}
 
-	if parsedRawBaseURL.Host != parsedRawCurrentURL.Host {
-		fmt.Println("not same domain")
+	// stay within the same site
+	if currentURL.Hostname() != cfg.baseURL.Hostname() {
 		return
 	}
 
-	normalizeRawCurrentURL, err := normalizeURL(rawCurrentURL)
+	normalizedURL, err := normalizeURL(rawCurrentURL)
 	if err != nil {
-		log.Printf("error normalizing the current url: %v", err)
+		fmt.Printf("Error - normalizedURL: %v", err)
 		return
 	}
 
-	_, ok := pages[normalizeRawCurrentURL]
-	if ok {
-		pages[normalizeRawCurrentURL]++
+	// Only proceed the first time we see this normalized URL
+	isFirst := cfg.addPageVisit(normalizedURL)
+	if !isFirst {
 		return
 	}
 
-	pages[normalizeRawCurrentURL] = 1
+	fmt.Printf("crawling %s\n", rawCurrentURL)
 
-	fmt.Printf("Crawling: %s\n", rawCurrentURL)
-	html, err := getHTML(rawCurrentURL)
+	htmlBody, err := getHTML(rawCurrentURL)
 	if err != nil {
-		log.Printf("error getting the html: %v, url: %s", err, rawCurrentURL)
+		fmt.Printf("Error - getHTML: %v", err)
 		return
 	}
 
-	pageData := extractPageData(html, rawCurrentURL)
-	for _, link := range pageData.OutgoingLinks {
-		crawlPage(rawBaseURL, link, pages)
+	// Extract all the data we care about and store it
+	pageData := extractPageData(htmlBody, rawCurrentURL)
+	cfg.setPageData(normalizedURL, pageData)
+
+	// Recurse using the already-extracted outgoing links
+	for _, nextURL := range pageData.OutgoingLinks {
+		cfg.wg.Add(1)
+		go cfg.crawlPage(nextURL)
 	}
 }
